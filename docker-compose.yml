@@ -1,0 +1,130 @@
+x-node-env: &node-env
+  DATABASE_URL: ${DATABASE_URL}
+  PGSSL: ${PGSSL:-true}
+  STEP_DELAY_MIN_MS: ${STEP_DELAY_MIN_MS:-2000}
+  STEP_DELAY_MAX_MS: ${STEP_DELAY_MAX_MS:-4000}
+
+services:
+  prefect-server:
+    image: prefecthq/prefect:3-python3.11
+    command: prefect server start --host 0.0.0.0
+    ports:
+      - "4200:4200"
+    environment:
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+    volumes:
+      - prefect_data:/root/.prefect
+
+  accounts:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.node
+      args:
+        SERVICE_DIR: services/accounts
+    environment:
+      <<: *node-env
+      PORT: 4001
+      BRIDGE_URL: http://prefect-bridge:4040
+      EVENT_BUS_URL: http://event-bus:4010
+    ports:
+      - "4001:4001"
+
+  risk:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.node
+      args:
+        SERVICE_DIR: services/risk
+    environment:
+      <<: *node-env
+      PORT: 4002
+      BRIDGE_URL: http://prefect-bridge:4040
+      EVENT_BUS_URL: http://event-bus:4010
+    ports:
+      - "4002:4002"
+
+  clearing:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.node
+      args:
+        SERVICE_DIR: services/clearing
+    environment:
+      <<: *node-env
+      PORT: 4003
+      BRIDGE_URL: http://prefect-bridge:4040
+      EVENT_BUS_URL: http://event-bus:4010
+    ports:
+      - "4003:4003"
+
+  event-bus:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.node
+      args:
+        SERVICE_DIR: services/event-bus
+    environment:
+      <<: *node-env
+      PORT: 4010
+      ACCOUNTS_URL: http://accounts:4001
+      RISK_URL: http://risk:4002
+      CLEARING_URL: http://clearing:4003
+    ports:
+      - "4010:4010"
+    depends_on:
+      - accounts
+      - risk
+      - clearing
+
+  prefect-bridge:
+    build:
+      context: services/prefect-bridge
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      PGSSL: ${PGSSL:-true}
+      ACCOUNTS_URL: http://accounts:4001
+      RISK_URL: http://risk:4002
+      CLEARING_URL: http://clearing:4003
+      PREFECT_API_URL: http://prefect-server:4200/api
+    ports:
+      - "4040:4040"
+    depends_on:
+      - prefect-server
+      - accounts
+      - risk
+      - clearing
+
+  gateway:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.node
+      args:
+        SERVICE_DIR: services/gateway
+    environment:
+      <<: *node-env
+      PORT: 4000
+      BRIDGE_URL: http://prefect-bridge:4040
+      EVENT_BUS_URL: http://event-bus:4010
+      ACCOUNTS_URL: http://accounts:4001
+    ports:
+      - "4000:4000"
+    depends_on:
+      - prefect-bridge
+      - event-bus
+      - accounts
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      VITE_API_URL: http://localhost:4000
+      VITE_PREFECT_URL: http://localhost:4200
+    ports:
+      - "5173:5173"
+    depends_on:
+      - gateway
+
+volumes:
+  prefect_data:

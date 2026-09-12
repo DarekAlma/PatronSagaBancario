@@ -1,0 +1,17 @@
+{
+  "name": "patron-saga-bancario",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*",
+    "services/*",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n ACCOUNTS,RISK,CLEARING,BUS,OBS,GATEWAY,WEB -c blue,magenta,yellow,cyan,green,red,white \"npm run dev -w services/accounts\" \"npm run dev -w services/risk\" \"npm run dev -w services/clearing\" \"npm run dev -w services/event-bus\" \"npm run dev -w services/observability\" \"npm run dev -w services/gateway\" \"npm run dev -w frontend\"",
+    "dev:backend": "concurrently -n ACCOUNTS,RISK,CLEARING,BUS,OBS,GATEWAY -c blue,magenta,yellow,cyan,green,red \"npm run dev -w services/accounts\" \"npm run dev -w services/risk\" \"npm run dev -w services/clearing\" \"npm run dev -w services/event-bus\" \"npm run dev -w services/observability\" \"npm run dev -w services/gateway\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
