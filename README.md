@@ -2,6 +2,12 @@
 
 Taller: Implementación del Patrón Saga (Orquestación vs. Coreografía) con observabilidad en **Prefect**.
 
+## Miembros: Valentina Ruiz Torres y Darek Aljuri Martinez
+
+## Link video de demostración: https://youtu.be/pPAP9WztEVM
+
+## Documento Comparación: [docs/COMPARATIVA.md](docs/COMPARATIVA.md).
+
 ## Arquitectura
 
 ```mermaid
