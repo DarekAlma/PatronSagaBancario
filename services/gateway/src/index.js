@@ -70,23 +70,32 @@ app.post('/api/transfers', async (req, res) => {
   res.status(result.statusCode).json({ ...result.body, idempotencyKey: key, duplicado: result.cached });
 });
 
-app.get('/api/transfers/:sagaId', async (req, res) => {
-  const upstream = await fetch(`${BRIDGE_URL}/sagas/${req.params.sagaId}`);
-  const body = await upstream.json();
+// Reenvia una respuesta upstream tal cual; si el servicio de dominio esta
+// caido o devuelve algo que no es JSON, responde 502 en vez de tumbar el
+// proceso completo (un fetch/.json() sin capturar aqui mataria el gateway
+// entero ante cualquier hipo transitorio de un servicio rio abajo).
+async function proxyJson(res, url, options) {
+  let upstream;
+  try {
+    upstream = await fetch(url, options);
+  } catch (err) {
+    return res.status(502).json({ error: 'SERVICIO_NO_DISPONIBLE', detail: err.message });
+  }
+  const text = await upstream.text();
+  let body;
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    return res.status(502).json({ error: 'RESPUESTA_INVALIDA_UPSTREAM', detail: text.slice(0, 300) });
+  }
   res.status(upstream.status).json(body);
-});
+}
 
-app.get('/api/transfers', async (_req, res) => {
-  const upstream = await fetch(`${BRIDGE_URL}/sagas`);
-  const body = await upstream.json();
-  res.status(upstream.status).json(body);
-});
+app.get('/api/transfers/:sagaId', (req, res) => proxyJson(res, `${BRIDGE_URL}/sagas/${req.params.sagaId}`));
 
-app.get('/api/accounts', async (_req, res) => {
-  const upstream = await fetch(`${ACCOUNTS_URL}/accounts`);
-  const body = await upstream.json();
-  res.status(upstream.status).json(body);
-});
+app.get('/api/transfers', (_req, res) => proxyJson(res, `${BRIDGE_URL}/sagas`));
+
+app.get('/api/accounts', (_req, res) => proxyJson(res, `${ACCOUNTS_URL}/accounts`));
 
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'gateway' }));
 

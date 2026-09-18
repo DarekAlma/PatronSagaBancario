@@ -3,6 +3,18 @@ from prefect import tags
 
 from app import store, flows
 from app.db import ensure_schema
+from app.tasks import StepRejected
+
+
+async def _run_choreo_step(coro):
+    """Ejecuta un flow de coreografia y traduce un rechazo de negocio (la
+    excepcion se relanza a proposito para que el flow-run quede en rojo en
+    Prefect) de vuelta a la respuesta {statusCode, body} que espera el
+    microservicio Node que llamo a este endpoint."""
+    try:
+        return await coro
+    except StepRejected as err:
+        return {"statusCode": err.status_code, "body": err.body}
 
 app = FastAPI(title="Prefect Bridge - Saga Bancaria")
 
@@ -74,15 +86,19 @@ async def orchestrate(payload: dict, background_tasks: BackgroundTasks):
 async def step_debito_origen(payload: dict):
     saga_id = payload["sagaId"]
     with tags(saga_id, "choreography", "DEBITO_ORIGEN"):
-        return await flows.choreo_debito_origen(saga_id, payload["accountId"], payload["amountCents"])
+        return await _run_choreo_step(
+            flows.choreo_debito_origen(saga_id, payload["accountId"], payload["amountCents"]),
+        )
 
 
 @app.post("/steps/validar-riesgo")
 async def step_validar_riesgo(payload: dict):
     saga_id = payload["sagaId"]
     with tags(saga_id, "choreography", "VALIDACION_RIESGO"):
-        return await flows.choreo_validar_riesgo(
-            saga_id, payload["originAccountId"], payload["amountCents"], bool(payload.get("forceFraud")),
+        return await _run_choreo_step(
+            flows.choreo_validar_riesgo(
+                saga_id, payload["originAccountId"], payload["amountCents"], bool(payload.get("forceFraud")),
+            ),
         )
 
 
@@ -90,8 +106,10 @@ async def step_validar_riesgo(payload: dict):
 async def step_liquidacion_interbancaria(payload: dict):
     saga_id = payload["sagaId"]
     with tags(saga_id, "choreography", "LIQUIDACION_INTERBANCARIA"):
-        return await flows.choreo_liquidar_interbancaria(
-            saga_id, payload["destinationAccountId"], payload["amountCents"], bool(payload.get("forceTimeout")),
+        return await _run_choreo_step(
+            flows.choreo_liquidar_interbancaria(
+                saga_id, payload["destinationAccountId"], payload["amountCents"], bool(payload.get("forceTimeout")),
+            ),
         )
 
 

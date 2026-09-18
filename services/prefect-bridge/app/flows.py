@@ -92,7 +92,11 @@ async def _run_step(saga_id, step_name, coro):
         return {"statusCode": 200, "body": body}
     except StepRejected as err:
         await store.add_step(saga_id, step_name, "FAILED", err.body)
-        return {"statusCode": err.status_code, "body": err.body}
+        # Se relanza a proposito: un rechazo de negocio (fraude, red caida, etc.)
+        # debe verse en rojo en el propio flow-run en la lista de Prefect, no
+        # solo en la task interna. Quien llama a este flow (main.py) la atrapa
+        # y la traduce de vuelta a {statusCode, body} para el servicio Node.
+        raise
 
 
 @flow(name="Coreografia - Debito en cuenta origen")

@@ -38,7 +38,7 @@ flowchart LR
   - `clearing` — Pasarela Interbancaria (liquidación externa simulada).
 - **Event Bus** (Node/Express): relé de publicación/suscripción para la Saga Coreografiada. No contiene lógica de negocio ni decide nada — solo entrega eventos.
 - **Prefect Bridge** (Python/FastAPI): aquí vive el **orquestador real** (`saga_orquestada_flow`, un flow de Prefect con una task por paso) y los flows individuales que registran cada reacción de la coreografía en Prefect.
-- **Prefect Server**: motor + UI de observabilidad (`http://localhost:4200`). Todo paso de ambas variantes de la Saga —incluyendo las compensaciones— corre como un flow/task real de Prefect y queda visible ahí, taggeado con el `sagaId`.
+- **Prefect Server**: motor + UI de observabilidad (`http://127.0.0.1:4200`). Todo paso de ambas variantes de la Saga —incluyendo las compensaciones— corre como un flow/task real de Prefect y queda visible ahí, taggeado con el `sagaId`.
 - **Base de datos**: Postgres en **Supabase** (nube), un único proyecto con esquemas lógicamente aislados (`accounts`, `risk`, `clearing`, `gateway`, `sagas`). Todo lo demás corre 100% local en Docker.
 
 ## Por qué Orquestación y Coreografía comparten el mismo Prefect
@@ -69,18 +69,20 @@ No necesitas crear tablas manualmente: cada servicio ejecuta `CREATE SCHEMA/TABL
 docker compose up --build
 ```
 
-Servicios expuestos en tu máquina:
+Servicios expuestos en tu máquina — **usa siempre `127.0.0.1`, no `localhost`** (ver nota abajo):
 
 | Servicio | URL |
 |---|---|
-| Frontend | http://localhost:5173 |
-| API Gateway | http://localhost:4000 |
-| Prefect UI | http://localhost:4200 |
-| Prefect Bridge | http://localhost:4040 |
+| Frontend | http://127.0.0.1:5173 |
+| API Gateway | http://127.0.0.1:4000 |
+| Prefect UI | http://127.0.0.1:4200 |
+| Prefect Bridge | http://127.0.0.1:4040 |
 | Accounts / Risk / Clearing | :4001 / :4002 / :4003 |
-| Event Bus | http://localhost:4010 |
+| Event Bus | http://127.0.0.1:4010 |
 
-Abre `http://localhost:5173`, realiza una transferencia y luego abre `http://localhost:4200` → **Flow Runs** para ver cada paso (y compensación) ejecutándose con su delay real.
+Abre `http://127.0.0.1:5173`, realiza una transferencia y luego abre `http://127.0.0.1:4200` → **Runs** para ver cada paso (y compensación) ejecutándose con su delay real (filtra por el tag = `sagaId` que te muestra el frontend).
+
+> **¿Por qué `127.0.0.1` y no `localhost`?** En Windows con Docker Desktop (backend WSL2), a veces queda un *relay* de puertos obsoleto de una ejecución anterior escuchando solo en `::1` (IPv6). Como `localhost` suele resolver primero a `::1`, el navegador puede terminar hablando con ese proceso viejo en vez del contenedor real, mostrando MIME types raros o "Unable to connect". `127.0.0.1` (IPv4 explícito) siempre apunta al contenedor correcto, sin ambigüedad — por eso el `docker-compose.yml` ya usa `127.0.0.1` de forma fija para las variables internas del frontend y de Prefect, y por eso es la URL recomendada para abrir en el navegador. Si aun así `localhost` no te sirve, reinicia Docker Desktop para limpiar el relay viejo.
 
 ## 3. Alternativa sin Docker (desarrollo rápido)
 

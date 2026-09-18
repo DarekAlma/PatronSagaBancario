@@ -25,6 +25,12 @@ async def get_pool() -> asyncpg.Pool:
             min_size=1,
             max_size=int(os.getenv("PG_POOL_MAX", "5")),
             init=_register_json_codec,
+            # El pooler de Supabase (Supavisor/pgbouncer en modo transaccion) no
+            # soporta prepared statements del lado del servidor: cada conexion
+            # fisica se reutiliza entre transacciones, invalidando los nombres
+            # cacheados. Sin esto, la segunda escritura revienta con
+            # InvalidSQLStatementNameError.
+            statement_cache_size=0,
         )
     return _pool
 

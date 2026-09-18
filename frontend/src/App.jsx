@@ -46,6 +46,7 @@ export default function App() {
   });
   const [currentSaga, setCurrentSaga] = useState(null);
   const [lastSubmission, setLastSubmission] = useState(null);
+  const [duplicateInfo, setDuplicateInfo] = useState(null);
   const [error, setError] = useState('');
   const pollRef = useRef(null);
 
@@ -102,11 +103,12 @@ export default function App() {
 
   useEffect(() => () => stopPolling(), []);
 
-  async function submitTransfer(e, reuseSubmission) {
-    if (e) e.preventDefault();
+  async function submitTransfer(e) {
+    e.preventDefault();
     setError('');
+    setDuplicateInfo(null);
 
-    const payload = reuseSubmission ? reuseSubmission.payload : {
+    const payload = {
       originAccountId: form.originAccountId,
       destinationAccountId: form.destinationAccountId,
       amount: Number(form.amount),
@@ -116,21 +118,36 @@ export default function App() {
         forceNetworkTimeout: form.forceNetworkTimeout,
       },
     };
-    const idempotencyKey = reuseSubmission ? reuseSubmission.idempotencyKey : undefined;
 
     try {
-      const result = await postTransfer(idempotencyKey ? { ...payload, idempotencyKey } : payload);
+      const result = await postTransfer(payload);
       setLastSubmission({ payload, idempotencyKey: result.idempotencyKey });
-      setCurrentSaga({ sagaId: result.sagaId, status: 'PENDING', steps: [], mode: result.mode, duplicado: result.duplicado });
+      setCurrentSaga({ sagaId: result.sagaId, status: 'PENDING', steps: [], mode: result.mode });
       startPolling(result.sagaId);
     } catch (err) {
       setError(err.message);
     }
   }
 
-  function resendLast() {
+  async function resendLast() {
     if (!lastSubmission) return;
-    submitTransfer(null, lastSubmission);
+    setError('');
+
+    try {
+      // Mismo payload y el MISMO idempotencyKey a proposito: esto es CP-05.
+      const result = await postTransfer({ ...lastSubmission.payload, idempotencyKey: lastSubmission.idempotencyKey });
+      stopPolling();
+      const data = await getTransfer(result.sagaId);
+      setCurrentSaga(data);
+      setDuplicateInfo({
+        sagaId: result.sagaId,
+        idempotencyKey: result.idempotencyKey,
+        at: new Date().toLocaleTimeString(),
+      });
+      refreshAccounts();
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   return (
@@ -236,6 +253,16 @@ export default function App() {
         <section className="card">
           <h2>Traza de la Saga en curso</h2>
           {!currentSaga && <p className="hint">Inicia una transferencia para ver el avance paso a paso.</p>}
+          {duplicateInfo && (
+            <div className="duplicate-banner">
+              🔁 <strong>CP-05 · Idempotencia confirmada</strong> — reenviaste el mismo <code>idempotencyKey</code>
+              {' '}(<code>{duplicateInfo.idempotencyKey.slice(0, 8)}…</code>) a las {duplicateInfo.at}. El gateway
+              reconoció la operación como duplicada y devolvió el resultado ya existente de la saga{' '}
+              <code>{duplicateInfo.sagaId.slice(0, 8)}…</code> <strong>sin volver a ejecutar el flujo</strong>: no hay
+              un nuevo flow-run en Prefect para esta saga y el saldo de la cuenta no cambió. Revisa el panel de
+              Cuentas (no se movió) y en Prefect confirma que sigue habiendo la misma cantidad de flow-runs de antes.
+            </div>
+          )}
           {currentSaga && (
             <div className="saga-detail">
               <div className="saga-summary">
@@ -243,7 +270,6 @@ export default function App() {
                 <span className={`status-pill status-${currentSaga.status}`}>
                   {STATUS_LABELS[currentSaga.status] || currentSaga.status}
                 </span>
-                {currentSaga.duplicado && <span className="badge compensated">Duplicado detectado (idempotencia)</span>}
               </div>
               <ol className="timeline">
                 {(currentSaga.steps || [])

@@ -57,6 +57,18 @@ button[type=button] { background: #33406a; color: #e7ecf5; }
 
 .error { color: #ff8080; margin-top: 10px; }
 
+.duplicate-banner {
+  background: #3a2f5a;
+  border: 1px solid #7c5fd6;
+  color: #e3d9ff;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+.duplicate-banner code { background: #241c3d; padding: 1px 5px; border-radius: 4px; }
+
 .saga-summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .saga-id { font-family: monospace; color: #8fa3ce; }
 
