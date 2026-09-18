@@ -6,7 +6,7 @@ Taller: Implementación del Patrón Saga (Orquestación vs. Coreografía) con ob
 
 ## Link video de demostración: https://youtu.be/pPAP9WztEVM
 
-## Documento Comparación: [docs/COMPARATIVA.md](docs/COMPARATIVA.md).
+## Documento Patrón Saga Bancario: Fundamentos, Orquestación vs. Coreografía: [docs/COMPARATIVA.md](docs/COMPARATIVA.md).
 
 ## Arquitectura
 
